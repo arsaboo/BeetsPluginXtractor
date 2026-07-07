@@ -192,7 +192,8 @@ class XtractorCommand(Subcommand):
     def _run_write_to_item(self, item):
         if not self.cfg_dry_run:
             if self.cfg_write:
-                item.try_write()
+                write_path = self._get_input_path_for_item(item)
+                item.try_write(path=write_path)
 
     def _run_analysis(self, item):
         try:
