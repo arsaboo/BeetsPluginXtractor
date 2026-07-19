@@ -6,6 +6,7 @@
 
 import os
 import sqlite3
+from unittest.mock import patch
 
 from beets.library import Library, Item
 from beetsplug.xtractor import about
@@ -100,3 +101,45 @@ class CompletionTest(TestHelper, Assertions):
             os.path.normpath(absolute_path),
             os.path.normpath(cmd._get_input_path_for_item(stored_item)),
         )
+
+    def test_run_full_analysis_resolves_input_path_once(self):
+        item = Item(path=b"ignored.flac")
+        cmd = XtractorCommand(self.config[PLUGIN_NAME])
+        cmd.cfg_write = True
+        cmd.config["keep_output"] = False
+
+        with patch.object(cmd, "_get_input_path_for_item", return_value="/tmp/song.flac") as get_input_path:
+            with patch.object(cmd, "_run_analysis", return_value=True) as run_analysis:
+                with patch.object(cmd, "_run_write_to_item") as run_write:
+                    with patch.object(cmd, "_get_output_path_for_item", return_value="/tmp/output.json") as get_output:
+                        with patch("os.path.isfile", return_value=False):
+                            cmd.run_full_analysis(item)
+
+        get_input_path.assert_called_once_with(item)
+        run_analysis.assert_called_once_with(item, "/tmp/song.flac")
+        run_write.assert_called_once_with(item, "/tmp/song.flac")
+        get_output.assert_called_once_with(item, "/tmp/song.flac")
+
+    def test_run_full_analysis_skips_write_when_analysis_fails(self):
+        item = Item(path=b"ignored.flac")
+        cmd = XtractorCommand(self.config[PLUGIN_NAME])
+
+        with patch.object(cmd, "_get_input_path_for_item", return_value="/tmp/song.flac"):
+            with patch.object(cmd, "_run_analysis", return_value=False) as run_analysis:
+                with patch.object(cmd, "_run_write_to_item") as run_write:
+                    cmd.run_full_analysis(item)
+
+        run_analysis.assert_called_once_with(item, "/tmp/song.flac")
+        run_write.assert_not_called()
+
+    def test_run_full_analysis_skips_analysis_and_write_for_missing_file(self):
+        item = Item(path=b"missing.flac")
+        cmd = XtractorCommand(self.config[PLUGIN_NAME])
+
+        with patch.object(cmd, "_get_input_path_for_item", side_effect=FileNotFoundError("missing")):
+            with patch.object(cmd, "_run_analysis") as run_analysis:
+                with patch.object(cmd, "_run_write_to_item") as run_write:
+                    cmd.run_full_analysis(item)
+
+        run_analysis.assert_not_called()
+        run_write.assert_not_called()
