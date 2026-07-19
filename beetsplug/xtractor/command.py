@@ -16,7 +16,6 @@ import yaml
 from beets import dbcore
 from beets.library import Library, Item, parse_query_string
 from beets.ui import Subcommand, decargs
-from beets.util import bytestring_path, normpath, syspath
 from beetsplug.xtractor import helper
 from confuse import Subview
 
@@ -290,18 +289,7 @@ class XtractorCommand(Subcommand):
         return os.path.join(self._get_extraction_output_path(), output_file)
 
     def _get_input_path_for_item(self, item: Item):
-        input_path = item.get("path")
-        if isinstance(input_path, str):
-            input_path = bytestring_path(input_path)
-
-        if not os.path.isabs(os.fsdecode(input_path)):
-            library_directory = self.lib.directory
-            if isinstance(library_directory, str):
-                library_directory = bytestring_path(library_directory)
-            input_path = os.path.join(library_directory, input_path)
-
-        input_path = normpath(input_path)
-        input_path = syspath(input_path)
+        input_path = os.fspath(item.filepath)
 
         if not os.path.isfile(input_path):
             raise FileNotFoundError("Input file({}) not found!".format(input_path))

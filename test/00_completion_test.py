@@ -5,10 +5,9 @@
 #  License: See LICENSE.txt
 
 import os
+import sqlite3
 
-from beets.library import Item
-from beets.util import displayable_path
-
+from beets.library import Library, Item
 from beetsplug.xtractor import about
 from beetsplug.xtractor.command import XtractorCommand
 
@@ -18,10 +17,6 @@ from test.helper import TestHelper, Assertions, \
     capture_log
 
 plg_log_ns = 'beets.{}'.format(PLUGIN_NAME)
-
-
-def _normalize_test_path(path):
-    return os.path.normpath(displayable_path(path).removeprefix('\\\\?\\'))
 
 
 class CompletionTest(TestHelper, Assertions):
@@ -77,17 +72,31 @@ class CompletionTest(TestHelper, Assertions):
         cmd = XtractorCommand(self.config[PLUGIN_NAME])
         cmd.lib = self.lib
 
-        self.assertEqual(os.path.normpath(path.decode()), _normalize_test_path(cmd._get_input_path_for_item(item)))
+        self.assertEqual(os.path.normpath(path.decode()), os.path.normpath(cmd._get_input_path_for_item(item)))
 
-    def test_get_input_path_for_item_with_relative_path(self):
-        relative_path = b"nested/relative.flac"
-        absolute_path = self.lib_path(relative_path)
+    def test_get_input_path_for_item_uses_library_backed_filepath(self):
+        tempdir = self.mkdtemp()
+        library_dir = os.path.join(tempdir, "music")
+        db_path = os.path.join(tempdir, "library.db")
+        relative_path = os.path.join("nested", "library.flac")
+        absolute_path = os.path.join(library_dir, relative_path)
+
         os.makedirs(os.path.dirname(absolute_path), exist_ok=True)
         with open(absolute_path, "wb"):
             pass
 
-        item = Item(path=relative_path)
-        cmd = XtractorCommand(self.config[PLUGIN_NAME])
-        cmd.lib = self.lib
+        lib = Library(db_path, library_dir)
+        item = Item(path=absolute_path.encode())
+        lib.add(item)
+        stored_item = list(lib.items())[0]
+        with sqlite3.connect(db_path) as conn:
+            stored_path = conn.execute("select path from items").fetchone()[0]
 
-        self.assertEqual(os.path.normpath(absolute_path.decode()), _normalize_test_path(cmd._get_input_path_for_item(item)))
+        cmd = XtractorCommand(self.config[PLUGIN_NAME])
+        cmd.lib = lib
+
+        self.assertEqual(relative_path, os.fsdecode(stored_path))
+        self.assertEqual(
+            os.path.normpath(absolute_path),
+            os.path.normpath(cmd._get_input_path_for_item(stored_item)),
+        )
