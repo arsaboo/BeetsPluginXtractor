@@ -23,6 +23,8 @@ The plugin can be installed via:
 pip install beets-xtractor
 ```
 
+This plugin supports beets `2.10.0+`.
+
 and activated the usual way by adding `xtractor` to the list of plugins in your configuration:
 
 ```yaml

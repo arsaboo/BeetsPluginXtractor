@@ -16,7 +16,6 @@ import yaml
 from beets import dbcore
 from beets.library import Library, Item, parse_query_string
 from beets.ui import Subcommand, decargs
-from beets.util import bytestring_path, normpath, syspath
 from beetsplug.xtractor import helper
 from confuse import Subview
 
@@ -180,36 +179,39 @@ class XtractorCommand(Subcommand):
             return
 
     def run_full_analysis(self, item):
-        self._run_analysis(item)
-        self._run_write_to_item(item)
-
-        # Delete output files (if config wants)
-        if self.config["keep_output"].exists() and not self.config["keep_output"].get():
-            output_path = self._get_output_path_for_item(item)
-            if os.path.isfile(output_path):
-                os.unlink(output_path)
-
-    def _run_write_to_item(self, item):
-        if not self.cfg_dry_run:
-            if self.cfg_write:
-                write_path = self._get_input_path_for_item(item)
-                item.try_write(path=write_path)
-
-    def _run_analysis(self, item):
         try:
-            extractor_path = self._get_extractor_path()
             input_path = self._get_input_path_for_item(item)
-            output_path = self._get_output_path_for_item(item)
-            profile_path = self._get_extractor_profile_path()
-        except ValueError as e:
-            self._say("Value error: {0}".format(e))
-            return
-        except KeyError as e:
-            self._say("Configuration error: {0}".format(e))
-            return
         except FileNotFoundError as e:
             self._say("File not found error: {0}".format(e))
             return
+
+        if not self._run_analysis(item, input_path):
+            return
+
+        self._run_write_to_item(item, input_path)
+
+        # Delete output files (if config wants)
+        if self.config["keep_output"].exists() and not self.config["keep_output"].get():
+            output_path = self._get_output_path_for_item(item, input_path)
+            if os.path.isfile(output_path):
+                os.unlink(output_path)
+
+    def _run_write_to_item(self, item, input_path):
+        if not self.cfg_dry_run:
+            if self.cfg_write:
+                item.try_write(path=input_path)
+
+    def _run_analysis(self, item, input_path):
+        try:
+            extractor_path = self._get_extractor_path()
+            output_path = self._get_output_path_for_item(item, input_path)
+            profile_path = self._get_extractor_profile_path()
+        except ValueError as e:
+            self._say("Value error: {0}".format(e))
+            return False
+        except KeyError as e:
+            self._say("Configuration error: {0}".format(e))
+            return False
 
         self._say("Running analysis for: {0}".format(input_path))
         self._run_essentia_extractor(extractor_path, input_path, output_path, profile_path)
@@ -219,14 +221,14 @@ class XtractorCommand(Subcommand):
             audiodata_low = helper.extract_from_output(output_path, self.config["low_level_targets"])
         except FileNotFoundError as e:
             self._say("File not found: {0}".format(e))
-            return
+            return False
 
         # Extract high level targets
         try:
             audiodata_high = helper.extract_from_output(output_path, self.config["high_level_targets"])
         except FileNotFoundError as e:
             self._say("File not found: {0}".format(e))
-            return
+            return False
 
         # Merge audio data
         audiodata = {**audiodata_low, **audiodata_high}
@@ -238,6 +240,8 @@ class XtractorCommand(Subcommand):
                 if audiodata.get(attr):
                     setattr(item, attr, audiodata.get(attr))
             item.store()
+
+        return True
 
     def _run_essentia_extractor(self, extractor_path, input_path, output_path, profile_path):
         if os.path.isfile(output_path):
@@ -276,10 +280,11 @@ class XtractorCommand(Subcommand):
     def _show_progress(self, done, total):
         print('Finished: [%d/%d]\r' % (done, total), end="")
 
-    def _get_output_path_for_item(self, item: Item):
+    def _get_output_path_for_item(self, item: Item, input_path=None):
         identifier = item.get("mb_trackid")
         if not identifier or '/' in identifier:
-            input_path = self._get_input_path_for_item(item)
+            if input_path is None:
+                input_path = self._get_input_path_for_item(item)
             identifier = hashlib.md5(input_path.encode('utf-8')).hexdigest()
 
         output_file = "{id}.{ext}".format(
@@ -290,18 +295,10 @@ class XtractorCommand(Subcommand):
         return os.path.join(self._get_extraction_output_path(), output_file)
 
     def _get_input_path_for_item(self, item: Item):
-        input_path = item.get("path")
-        if isinstance(input_path, str):
-            input_path = bytestring_path(input_path)
+        input_path = os.fspath(item.filepath)
 
-        if not os.path.isabs(os.fsdecode(input_path)):
-            library_directory = self.lib.directory
-            if isinstance(library_directory, str):
-                library_directory = bytestring_path(library_directory)
-            input_path = os.path.join(library_directory, input_path)
-
-        input_path = normpath(input_path)
-        input_path = syspath(input_path)
+        if not os.path.isabs(input_path):
+            input_path = os.path.join(os.fsdecode(self.lib.directory), input_path)
 
         if not os.path.isfile(input_path):
             raise FileNotFoundError("Input file({}) not found!".format(input_path))

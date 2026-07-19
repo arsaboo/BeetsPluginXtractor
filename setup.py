@@ -40,7 +40,7 @@ setup(
     python_requires='>=3.8',
 
     install_requires=[
-        'beets>=1.4.9',
+        'beets>=2.10.0',
         'pyyaml'
     ],
 
