@@ -297,6 +297,9 @@ class XtractorCommand(Subcommand):
     def _get_input_path_for_item(self, item: Item):
         input_path = os.fspath(item.filepath)
 
+        if not os.path.isabs(input_path):
+            input_path = os.path.join(os.fsdecode(self.lib.directory), input_path)
+
         if not os.path.isfile(input_path):
             raise FileNotFoundError("Input file({}) not found!".format(input_path))
 

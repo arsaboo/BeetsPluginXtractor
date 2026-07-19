@@ -102,6 +102,22 @@ class CompletionTest(TestHelper, Assertions):
             os.path.normpath(cmd._get_input_path_for_item(stored_item)),
         )
 
+    def test_get_input_path_for_item_resolves_relative_public_filepath_against_library_dir(self):
+        relative_path = os.path.join("nested", "relative.flac")
+        absolute_path = os.path.join(os.fsdecode(self.lib.directory), relative_path)
+        os.makedirs(os.path.dirname(absolute_path), exist_ok=True)
+        with open(absolute_path, "wb"):
+            pass
+
+        item = Item(path=relative_path.encode())
+        cmd = XtractorCommand(self.config[PLUGIN_NAME])
+        cmd.lib = self.lib
+
+        self.assertEqual(
+            os.path.normpath(absolute_path),
+            os.path.normpath(cmd._get_input_path_for_item(item)),
+        )
+
     def test_run_full_analysis_resolves_input_path_once(self):
         item = Item(path=b"ignored.flac")
         cmd = XtractorCommand(self.config[PLUGIN_NAME])
