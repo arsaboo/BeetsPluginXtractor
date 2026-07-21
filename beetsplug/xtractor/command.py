@@ -182,7 +182,7 @@ class XtractorCommand(Subcommand):
         try:
             input_path = self._get_input_path_for_item(item)
         except FileNotFoundError as e:
-            self._say("File not found error: {0}".format(e))
+            self._say("File not found: {0}".format(e))
             return
 
         if not self._run_analysis(item, input_path):
@@ -197,9 +197,8 @@ class XtractorCommand(Subcommand):
                 os.unlink(output_path)
 
     def _run_write_to_item(self, item, input_path):
-        if not self.cfg_dry_run:
-            if self.cfg_write:
-                item.try_write(path=input_path)
+        if not self.cfg_dry_run and self.cfg_write:
+            item.try_write(path=input_path)
 
     def _run_analysis(self, item, input_path):
         try:
@@ -283,8 +282,7 @@ class XtractorCommand(Subcommand):
     def _get_output_path_for_item(self, item: Item, input_path=None):
         identifier = item.get("mb_trackid")
         if not identifier or '/' in identifier:
-            if input_path is None:
-                input_path = self._get_input_path_for_item(item)
+            input_path = input_path or self._get_input_path_for_item(item)
             identifier = hashlib.md5(input_path.encode('utf-8')).hexdigest()
 
         output_file = "{id}.{ext}".format(
