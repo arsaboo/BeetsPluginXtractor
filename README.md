@@ -24,7 +24,7 @@ pip install beets-xtractor
 ```
 
 > [!IMPORTANT]  
-> Requires beets 2.10.0 or later.
+> Requires [beets 2.10.0](https://github.com/beetbox/beets/releases/tag/v2.10.0) or later.
 
 Activate it by adding `xtractor` to the list of plugins in your configuration:
 
